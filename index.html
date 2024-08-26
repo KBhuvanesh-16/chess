@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turn-based Chess-like Game</title>
+    <style>
+        body {
+            background-color: #eedfdf;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #gameBoard {
+            display: grid;
+            grid-template-columns: repeat(5, 60px);
+            grid-template-rows: repeat(5, 60px);
+            margin: 20px 0;
+            border: 2px solid #666; /* Outer border for the whole board */
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            border: 1px solid #666; /* Border for each cell */
+            text-align: center;
+            line-height: 60px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .cell:nth-child(odd) {
+            background-color: #777; /* Darker color */
+        }
+        .cell:nth-child(even) {
+            background-color: #999; /* Lighter color */
+        }
+        .A-piece {
+            color: #00f; /* Blue for Player A pieces */
+        }
+        .B-piece {
+            color: #f00; /* Red for Player B pieces */
+        }
+        #messages {
+            color: #fff;
+            text-align: center;
+            margin-top: 20px;
+        }
+        #moveButtons {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        #moveButtons button {
+            margin: 0 5px;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameBoard"></div>
+    <div id="moveButtons"></div>
+    <div id="messages"></div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:5500');
+        let currentTurn = null;
+        let selectedPiece = null;
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'gameState') {
+                updateBoard(data.state);
+                currentTurn = data.state.currentTurn;
+                document.getElementById('messages').textContent = `Current turn: Player ${currentTurn}`;
+            } else if (data.type === 'invalidMove') {
+                document.getElementById('messages').textContent = `Invalid move: ${data.reason}`;
+            }
+        };
+
+        function updateBoard(state) {
+            const gameBoard = document.getElementById('gameBoard');
+            gameBoard.innerHTML = '';
+
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+
+                    const piece = state.board[row][col];
+                    if (piece) {
+                        cell.classList.add(piece[0] + '-piece');
+                        cell.textContent = piece;
+                    }
+
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.onclick = () => selectCell(row, col, piece);
+                    gameBoard.appendChild(cell);
+                }
+            }
+        }
+
+        function selectCell(row, col, piece) {
+            if (piece && piece[0] === currentTurn) {
+                selectedPiece = piece;
+                showMoveOptions(piece);
+            } else {
+                selectedPiece = null;
+                document.getElementById('moveButtons').innerHTML = '';
+            }
+        }
+
+        function showMoveOptions(piece) {
+            const moveButtons = document.getElementById('moveButtons');
+            moveButtons.innerHTML = '';
+
+            const [player, pieceType] = piece.split('-');
+            let moves;
+
+            switch (pieceType) {
+                case 'P1':
+                    moves = ['L', 'R', 'F', 'B'];
+                    break;
+                case 'H1':
+                    moves = ['L', 'R', 'F', 'B'];
+                    break;
+                case 'H2':
+                    moves = ['FL', 'FR', 'BL', 'BR'];
+                    break;
+            }
+
+            moves.forEach(move => {
+                const button = document.createElement('button');
+                button.textContent = move;
+                button.onclick = () => sendMove(`${piece}:${move}`);
+                moveButtons.appendChild(button);
+            });
+        }
+
+        function sendMove(move) {
+            ws.send(JSON.stringify({ type: 'move', move: move }));
+        }
+    </script>
+</body>
+</html>
